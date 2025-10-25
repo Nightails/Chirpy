@@ -32,7 +32,7 @@ func main() {
 	mux.HandleFunc("GET /admin/metrics", cfg.MetricsEndpoint)
 	mux.HandleFunc("POST /admin/reset", cfg.ResetDatabaseEndpoint)
 	mux.HandleFunc("GET /admin/healthz", api.ReadyEndpoint)
-	mux.HandleFunc("POST /api/validate_chirp", api.ValidateChirpEndpoint)
+	mux.HandleFunc("POST /api/chirps", cfg.ChirpsEndpoint)
 	mux.HandleFunc("POST /api/users", cfg.CreateUserEndpoint)
 	server := http.Server{Addr: ":8080", Handler: mux}
 	if err := server.ListenAndServe(); err != nil {

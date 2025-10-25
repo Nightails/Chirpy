@@ -42,14 +42,20 @@ func (cfg *Config) ResetDatabaseEndpoint(w http.ResponseWriter, req *http.Reques
 		respondWithError(w, http.StatusInternalServerError, "Error resetting database")
 		return
 	}
+	if err := cfg.DbQueries.RemoveAllChirps(req.Context()); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error resetting database")
+		return
+	}
 	respondWithJSON(w, http.StatusOK, "Database reset")
 }
 
-func ValidateChirpEndpoint(w http.ResponseWriter, req *http.Request) {
+func (cfg *Config) ChirpsEndpoint(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Body string `json:"body"`
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
 	}
 
+	// Request
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
 	if err := decoder.Decode(&params); err != nil {
@@ -58,13 +64,45 @@ func ValidateChirpEndpoint(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Create chirp
 	if len(params.Body) <= 140 {
 		filteredBody := filterProfanity(params.Body)
-		respondWithJSON(w, http.StatusOK, filteredBody)
-		return
+		chirp, err := cfg.DbQueries.CreateChirp(req.Context(), database.CreateChirpParams{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Body:      filteredBody,
+			UserID:    params.UserID,
+		})
+		if err != nil {
+			errMessage := fmt.Sprintf("Error creating chirp: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errMessage)
+			return
+		}
+
+		// Response
+		type chirpResponse struct {
+			ID        uuid.UUID `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+			Body      string    `json:"body"`
+			UserID    uuid.UUID `json:"user_id"`
+		}
+		resp := chirpResponse{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		}
+		data, _ := json.Marshal(resp)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		if _, err := w.Write(data); err != nil {
+			return
+		}
 	} else {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
-		return
 	}
 }
 

@@ -29,11 +29,12 @@ func main() {
 			),
 		),
 	)
-	mux.HandleFunc("GET /admin/metrics", cfg.MetricsEndpoint)
-	mux.HandleFunc("POST /admin/reset", cfg.ResetDatabaseEndpoint)
-	mux.HandleFunc("GET /admin/healthz", api.ReadyEndpoint)
-	mux.HandleFunc("POST /api/chirps", cfg.ChirpsEndpoint)
-	mux.HandleFunc("POST /api/users", cfg.CreateUserEndpoint)
+	mux.HandleFunc("GET /admin/metrics", cfg.DisplayMetrics)
+	mux.HandleFunc("POST /admin/reset", cfg.ResetDatabase)
+	mux.HandleFunc("GET /admin/healthz", api.HandleOKRequest)
+	mux.HandleFunc("POST /api/chirps", cfg.CreateChirp)
+	mux.HandleFunc("GET /api/chirps", cfg.GetChirps)
+	mux.HandleFunc("POST /api/users", cfg.RegisterUser)
 	server := http.Server{Addr: ":8080", Handler: mux}
 	if err := server.ListenAndServe(); err != nil {
 		return

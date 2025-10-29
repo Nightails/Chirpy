@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ReadyEndpoint(w http.ResponseWriter, req *http.Request) {
+func HandleOKRequest(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("OK")); err != nil {
@@ -18,7 +18,7 @@ func ReadyEndpoint(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (cfg *Config) MetricsEndpoint(w http.ResponseWriter, req *http.Request) {
+func (cfg *Config) DisplayMetrics(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	metrics := fmt.Sprintf(
@@ -30,7 +30,7 @@ func (cfg *Config) MetricsEndpoint(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (cfg *Config) ResetDatabaseEndpoint(w http.ResponseWriter, req *http.Request) {
+func (cfg *Config) ResetDatabase(w http.ResponseWriter, req *http.Request) {
 	// Only allow reset on a development platform
 	if cfg.Platform != "dev" {
 		respondWithError(w, http.StatusForbidden, "Not authorized")
@@ -49,7 +49,7 @@ func (cfg *Config) ResetDatabaseEndpoint(w http.ResponseWriter, req *http.Reques
 	respondWithJSON(w, http.StatusOK, "Database reset")
 }
 
-func (cfg *Config) ChirpsEndpoint(w http.ResponseWriter, req *http.Request) {
+func (cfg *Config) CreateChirp(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
 		Body   string    `json:"body"`
 		UserID uuid.UUID `json:"user_id"`
@@ -106,7 +106,39 @@ func (cfg *Config) ChirpsEndpoint(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (cfg *Config) CreateUserEndpoint(w http.ResponseWriter, req *http.Request) {
+func (cfg *Config) GetChirps(w http.ResponseWriter, req *http.Request) {
+	chirps, err := cfg.DbQueries.GetChirps(req.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting chirps")
+		return
+	}
+
+	type chirpResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
+	}
+	resp := make([]chirpResponse, 0, len(chirps))
+	for _, chirp := range chirps {
+		resp = append(resp, chirpResponse{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		})
+	}
+	data, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(data); err != nil {
+		return
+	}
+}
+
+func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	// Request
 	type parameters struct {
 		Email string `json:"email"`

@@ -34,6 +34,7 @@ func main() {
 	mux.HandleFunc("GET /admin/healthz", api.HandleOKRequest)
 	mux.HandleFunc("POST /api/chirps", cfg.CreateChirp)
 	mux.HandleFunc("GET /api/chirps", cfg.GetChirps)
+	mux.HandleFunc("GET /api/chirps/{id}", cfg.GetChirpByID)
 	mux.HandleFunc("POST /api/users", cfg.RegisterUser)
 	server := http.Server{Addr: ":8080", Handler: mux}
 	if err := server.ListenAndServe(); err != nil {

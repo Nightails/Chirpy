@@ -138,6 +138,41 @@ func (cfg *Config) GetChirps(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (cfg *Config) GetChirpByID(w http.ResponseWriter, req *http.Request) {
+	id := req.PathValue("id")
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing chirp ID")
+		return
+	}
+
+	chirp, err := cfg.DbQueries.GetChirpByID(req.Context(), uuid.MustParse(id))
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Error getting chirp")
+		return
+	}
+
+	type chirpResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
+	}
+	resp := chirpResponse{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	}
+	data, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(data); err != nil {
+		return
+	}
+}
+
 func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	// Request
 	type parameters struct {

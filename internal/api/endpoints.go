@@ -1,6 +1,7 @@
 package api
 
 import (
+	"chirpy/internal/auth"
 	"chirpy/internal/database"
 	"encoding/json"
 	"fmt"
@@ -176,7 +177,8 @@ func (cfg *Config) GetChirpByID(w http.ResponseWriter, req *http.Request) {
 func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	// Request
 	type parameters struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
@@ -186,12 +188,15 @@ func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	hashedPassword, err := auth.HashPassword(params.Password)
+
 	// Create user
 	user, err := cfg.DbQueries.CreateUser(req.Context(), database.CreateUserParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email:     params.Email,
+		ID:             uuid.New(),
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
 	})
 	if err != nil {
 		errMessage := fmt.Sprintf("Error creating user: %v", err)
@@ -215,6 +220,54 @@ func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	data, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
+	if _, err := w.Write(data); err != nil {
+		return
+	}
+}
+
+func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
+	// Request
+	type parameters struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	if err := decoder.Decode(&params); err != nil {
+		errMessage := fmt.Sprintf("Error decoding parameters: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+		return
+	}
+
+	// Get user
+	user, err := cfg.DbQueries.GetUserByEmail(req.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+		return
+	}
+
+	// Check password
+	if !auth.CheckPasswordHash(params.Password, user.HashedPassword) {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+		return
+	}
+
+	// Response
+	type userResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}
+	resp := userResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+	data, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(data); err != nil {
 		return
 	}

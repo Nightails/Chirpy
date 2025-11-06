@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -27,6 +29,7 @@ func CheckPasswordHash(password, hash string) bool {
 	return match
 }
 
+// MakeJWT creates a JWT token for the given user ID
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
 	claim := jwt.RegisteredClaims{
 		Issuer:    "chirpy",
@@ -42,6 +45,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 	return signed, nil
 }
 
+// ValidateJWT validates a JWT token and returns the user ID
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(tokenSecret), nil
@@ -62,10 +66,20 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	return uuid.Parse(id)
 }
 
+// GetBearerToken returns the token from the Authorization header
 func GetBearerToken(headers http.Header) (string, error) {
 	header := headers.Get("Authorization")
 	if header == "" || !strings.HasPrefix(header, "Bearer ") {
 		return "", errors.New("missing Authorization header")
 	}
 	return strings.TrimPrefix(header, "Bearer "), nil
+}
+
+// MakeRefreshToken generates a random refresh token
+func MakeRefreshToken() (string, error) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(key), nil
 }

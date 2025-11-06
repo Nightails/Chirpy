@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -443,5 +444,106 @@ func TestValidateJWT_DifferentSecrets(t *testing.T) {
 	_, err = ValidateJWT(token, secret2)
 	if err == nil {
 		t.Error("ValidateJWT() with wrong secret should have failed")
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	tests := []struct {
+		name      string
+		headers   http.Header
+		wantToken string
+		wantErr   bool
+	}{
+		{
+			name: "valid bearer token",
+			headers: http.Header{
+				"Authorization": []string{"Bearer valid-token-123"},
+			},
+			wantToken: "valid-token-123",
+			wantErr:   false,
+		},
+		{
+			name: "valid bearer token with JWT format",
+			headers: http.Header{
+				"Authorization": []string{"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"},
+			},
+			wantToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+			wantErr:   false,
+		},
+		{
+			name:      "missing authorization header",
+			headers:   http.Header{},
+			wantToken: "",
+			wantErr:   true,
+		},
+		{
+			name: "empty authorization header value",
+			headers: http.Header{
+				"Authorization": []string{""},
+			},
+			wantToken: "",
+			wantErr:   true,
+		},
+		{
+			name: "authorization header without Bearer prefix",
+			headers: http.Header{
+				"Authorization": []string{"token-without-bearer"},
+			},
+			wantToken: "",
+			wantErr:   true,
+		},
+		{
+			name: "authorization header with lowercase bearer",
+			headers: http.Header{
+				"Authorization": []string{"bearer lowercase-token"},
+			},
+			wantToken: "",
+			wantErr:   true,
+		},
+		{
+			name: "authorization header with Basic auth",
+			headers: http.Header{
+				"Authorization": []string{"Basic dXNlcjpwYXNz"},
+			},
+			wantToken: "",
+			wantErr:   true,
+		},
+		{
+			name: "bearer with no token",
+			headers: http.Header{
+				"Authorization": []string{"Bearer "},
+			},
+			wantToken: "",
+			wantErr:   false,
+		},
+		{
+			name: "bearer with extra spaces",
+			headers: http.Header{
+				"Authorization": []string{"Bearer  token-with-spaces"},
+			},
+			wantToken: " token-with-spaces",
+			wantErr:   false,
+		},
+		{
+			name: "bearer token with special characters",
+			headers: http.Header{
+				"Authorization": []string{"Bearer token_with-special.chars123"},
+			},
+			wantToken: "token_with-special.chars123",
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotToken, err := GetBearerToken(tt.headers)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetBearerToken() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotToken != tt.wantToken {
+				t.Errorf("GetBearerToken() gotToken = %v, want %v", gotToken, tt.wantToken)
+			}
+		})
 	}
 }

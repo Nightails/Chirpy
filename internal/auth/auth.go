@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"errors"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/argon2id"
@@ -40,18 +43,29 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 }
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
-	claims, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(tokenSecret), nil
 	})
 	if err != nil {
 		return uuid.Nil, err
 	}
-	if claims.Valid {
-		id, err := claims.Claims.GetSubject()
-		if err != nil {
-			return uuid.Nil, err
-		}
-		return uuid.Parse(id)
+
+	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	if !ok || !token.Valid {
+		return uuid.Nil, errors.New("invalid token")
 	}
-	return uuid.Nil, nil
+
+	id, err := claims.GetSubject()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uuid.Parse(id)
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	header := headers.Get("Authorization")
+	if header == "" || !strings.HasPrefix(header, "Bearer ") {
+		return "", errors.New("missing Authorization header")
+	}
+	return strings.TrimPrefix(header, "Bearer "), nil
 }

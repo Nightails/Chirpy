@@ -52,8 +52,7 @@ func (cfg *Config) ResetDatabase(w http.ResponseWriter, req *http.Request) {
 
 func (cfg *Config) CreateChirp(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	// Request
@@ -65,6 +64,18 @@ func (cfg *Config) CreateChirp(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Authenticate
+	bearerToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing Authorization header")
+		return
+	}
+	userID, err := auth.ValidateJWT(bearerToken, cfg.BearerToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "User not authorized")
+		return
+	}
+
 	// Create chirp
 	if len(params.Body) <= 140 {
 		filteredBody := filterProfanity(params.Body)
@@ -73,7 +84,7 @@ func (cfg *Config) CreateChirp(w http.ResponseWriter, req *http.Request) {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 			Body:      filteredBody,
-			UserID:    params.UserID,
+			UserID:    userID,
 		})
 		if err != nil {
 			errMessage := fmt.Sprintf("Error creating chirp: %v", err)
@@ -228,8 +239,9 @@ func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
 	// Request
 	type parameters struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password  string `json:"password"`
+		Email     string `json:"email"`
+		ExpiresIn int    `json:"expires_in_seconds"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
@@ -239,10 +251,23 @@ func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Validate expires_in and max value to 1 hour
+	if params.ExpiresIn <= 0 || params.ExpiresIn > 60*60 {
+		// Default to 1 hour
+		params.ExpiresIn = 60 * 60
+	}
+
 	// Get user
 	user, err := cfg.DbQueries.GetUserByEmail(req.Context(), params.Email)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
+		return
+	}
+
+	// Generate JWT
+	token, err := auth.MakeJWT(user.ID, cfg.BearerToken, time.Duration(params.ExpiresIn)*time.Second)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to generate JWT")
 		return
 	}
 
@@ -258,12 +283,14 @@ func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
 		CreatedAt time.Time `json:"created_at"`
 		UpdatedAt time.Time `json:"updated_at"`
 		Email     string    `json:"email"`
+		Token     string    `json:"token"`
 	}
 	resp := userResponse{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+		Token:     token,
 	}
 	data, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

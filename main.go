@@ -15,10 +15,15 @@ func main() {
 	_ = godotenv.Load(".env")
 	dbURL := os.Getenv("DB_URL")
 	platformType := os.Getenv("PLATFORM")
+	bearerTokenSecret := os.Getenv("BEARER_TOKEN_SECRET")
 	db, _ := sql.Open("postgres", dbURL)
 	dbQueries := database.New(db)
 
-	cfg := api.Config{DbQueries: dbQueries, Platform: platformType}
+	cfg := api.Config{
+		DbQueries:   dbQueries,
+		Platform:    platformType,
+		BearerToken: bearerTokenSecret,
+	}
 	mux := http.NewServeMux()
 	mux.Handle(
 		"/app/",

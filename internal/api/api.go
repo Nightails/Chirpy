@@ -10,6 +10,7 @@ type Config struct {
 	DbQueries      *database.Queries
 	FileserverHits atomic.Int32
 	Platform       string
+	BearerToken    string
 }
 
 func (cfg *Config) MiddlewareMetricsInc(next http.Handler) http.Handler {

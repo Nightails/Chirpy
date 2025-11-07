@@ -186,6 +186,46 @@ func (cfg *Config) GetChirpByID(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (cfg *Config) DeleteChirpByID(w http.ResponseWriter, req *http.Request) {
+	// Authorization
+	bearerToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing Authorization header")
+		return
+	}
+	userID, err := auth.ValidateJWT(bearerToken, cfg.BearerToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "User not authorized")
+		return
+	}
+
+	// Check for chirp ID
+	id := req.PathValue("id")
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing chirp ID")
+		return
+	}
+
+	// Verify user ownership
+	chirp, err := cfg.DbQueries.GetChirpByID(req.Context(), uuid.MustParse(id))
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Error getting chirp")
+		return
+	}
+	if chirp.UserID != userID {
+		respondWithError(w, http.StatusForbidden, "User not authorized")
+		return
+	}
+
+	// Delete chirp
+	if err := cfg.DbQueries.RemoveChirpByID(req.Context(), uuid.MustParse(id)); err != nil {
+		respondWithError(w, http.StatusNotFound, "Error deleting chirp")
+		return
+	}
+
+	respondWithJSON(w, http.StatusNoContent, "Chirp deleted")
+}
+
 func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	// Request
 	type parameters struct {

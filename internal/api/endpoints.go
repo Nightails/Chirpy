@@ -201,6 +201,10 @@ func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	}
 
 	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		errMessage := fmt.Sprintf("Error hashing password: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+	}
 
 	// Create user
 	user, err := cfg.DbQueries.CreateUser(req.Context(), database.CreateUserParams{
@@ -300,6 +304,75 @@ func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
 		Email:        user.Email,
 		Token:        accessToken,
 		RefreshToken: refreshToken,
+	}
+	data, _ := json.Marshal(resp)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(data); err != nil {
+		return
+	}
+}
+
+func (cfg *Config) UpdateUser(w http.ResponseWriter, req *http.Request) {
+	// Request Header
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing Authorization header")
+		return
+	}
+	if token == "" {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token")
+		return
+	}
+	userID, err := auth.ValidateJWT(token, cfg.BearerToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "User not authorized")
+		return
+	}
+
+	// Request Body
+	type parameters struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	if err := decoder.Decode(&params); err != nil {
+		errMessage := fmt.Sprintf("Error decoding parameters: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+		return
+	}
+
+	// Update password
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		errMessage := fmt.Sprintf("Error hashing password: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+	}
+
+	// Update user
+	if err := cfg.DbQueries.UpdateUser(req.Context(), database.UpdateUserParams{
+		ID:             userID,
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+		UpdatedAt:      time.Now(),
+	}); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error updating user")
+		return
+	}
+
+	// Response
+	type userResponse struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}
+	resp := userResponse{
+		ID:        userID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email:     params.Email,
 	}
 	data, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

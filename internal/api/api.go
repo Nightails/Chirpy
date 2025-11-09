@@ -11,6 +11,7 @@ type Config struct {
 	FileserverHits atomic.Int32
 	Platform       string
 	BearerToken    string
+	APIKey         string
 }
 
 func (cfg *Config) MiddlewareMetricsInc(next http.Handler) http.Handler {

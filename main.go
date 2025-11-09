@@ -16,6 +16,7 @@ func main() {
 	dbURL := os.Getenv("DB_URL")
 	platformType := os.Getenv("PLATFORM")
 	bearerTokenSecret := os.Getenv("BEARER_TOKEN_SECRET")
+	apiKey := os.Getenv("POLKA_KEY")
 	db, _ := sql.Open("postgres", dbURL)
 	dbQueries := database.New(db)
 
@@ -23,6 +24,7 @@ func main() {
 		DbQueries:   dbQueries,
 		Platform:    platformType,
 		BearerToken: bearerTokenSecret,
+		APIKey:      apiKey,
 	}
 	mux := http.NewServeMux()
 	mux.Handle(

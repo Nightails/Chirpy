@@ -547,3 +547,79 @@ func TestGetBearerToken(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAPIKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		headers     http.Header
+		expectedKey string
+		expectError bool
+	}{
+		{
+			name: "valid API key",
+			headers: http.Header{
+				"Authorization": []string{"ApiKey my-secret-api-key-123"},
+			},
+			expectedKey: "my-secret-api-key-123",
+			expectError: false,
+		},
+		{
+			name:        "missing Authorization header",
+			headers:     http.Header{},
+			expectedKey: "",
+			expectError: true,
+		},
+		{
+			name: "wrong prefix - Bearer instead of ApiKey",
+			headers: http.Header{
+				"Authorization": []string{"Bearer some-token"},
+			},
+			expectedKey: "",
+			expectError: true,
+		},
+		{
+			name: "ApiKey with no space",
+			headers: http.Header{
+				"Authorization": []string{"ApiKeyno-space"},
+			},
+			expectedKey: "",
+			expectError: true,
+		},
+		{
+			name: "empty ApiKey value",
+			headers: http.Header{
+				"Authorization": []string{"ApiKey "},
+			},
+			expectedKey: "",
+			expectError: false,
+		},
+		{
+			name: "case sensitive - lowercase apikey",
+			headers: http.Header{
+				"Authorization": []string{"apikey my-secret-key"},
+			},
+			expectedKey: "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apiKey, err := GetAPIKey(tt.headers)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+
+			if apiKey != tt.expectedKey {
+				t.Errorf("expected key %q, got %q", tt.expectedKey, apiKey)
+			}
+		})
+	}
+}

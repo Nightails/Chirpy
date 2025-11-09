@@ -475,6 +475,17 @@ func (cfg *Config) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
 // Webhook Handlers
 
 func (cfg *Config) ChirpyRedWebhook(w http.ResponseWriter, r *http.Request) {
+	// Authorization
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	if apiKey != cfg.APIKey {
+		respondWithError(w, http.StatusUnauthorized, "Invalid API-Key")
+		return
+	}
+
 	// Request
 	type parameters struct {
 		Event string `json:"event"`

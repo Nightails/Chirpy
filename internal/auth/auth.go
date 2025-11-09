@@ -83,3 +83,12 @@ func MakeRefreshToken() (string, error) {
 	}
 	return hex.EncodeToString(key), nil
 }
+
+// GetAPIKey returns the API key from the Authorization header
+func GetAPIKey(headers http.Header) (string, error) {
+	header := headers.Get("Authorization")
+	if header == "" || !strings.HasPrefix(header, "ApiKey ") {
+		return "", errors.New("missing API-Key header")
+	}
+	return strings.TrimPrefix(header, "ApiKey "), nil
+}

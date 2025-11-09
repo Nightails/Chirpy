@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// Metrics Handlers
+
 func HandleOKRequest(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -50,6 +52,8 @@ func (cfg *Config) ResetDatabase(w http.ResponseWriter, req *http.Request) {
 	}
 	respondWithJSON(w, http.StatusOK, "Database reset")
 }
+
+// Chirps Handlers
 
 func (cfg *Config) CreateChirp(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
@@ -226,6 +230,8 @@ func (cfg *Config) DeleteChirpByID(w http.ResponseWriter, req *http.Request) {
 	respondWithJSON(w, http.StatusNoContent, "Chirp deleted")
 }
 
+// Users Handlers
+
 func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 	// Request
 	type parameters struct {
@@ -260,25 +266,7 @@ func (cfg *Config) RegisterUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Response
-	type userResponse struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-	}
-	resp := userResponse{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-	}
-	data, _ := json.Marshal(resp)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	if _, err := w.Write(data); err != nil {
-		return
-	}
+	respondWithUserJSON(w, http.StatusCreated, user)
 }
 
 func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
@@ -334,6 +322,7 @@ func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
 		CreatedAt    time.Time `json:"created_at"`
 		UpdatedAt    time.Time `json:"updated_at"`
 		Email        string    `json:"email"`
+		IsChirpyRed  bool      `json:"is_chirpy_red"`
 		Token        string    `json:"token"`
 		RefreshToken string    `json:"refresh_token"`
 	}
@@ -342,6 +331,7 @@ func (cfg *Config) LoginUser(w http.ResponseWriter, req *http.Request) {
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
 		Email:        user.Email,
+		IsChirpyRed:  user.IsChirpyRed,
 		Token:        accessToken,
 		RefreshToken: refreshToken,
 	}
@@ -401,26 +391,17 @@ func (cfg *Config) UpdateUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Response
-	type userResponse struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-	}
-	resp := userResponse{
-		ID:        userID,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Email:     params.Email,
-	}
-	data, _ := json.Marshal(resp)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(data); err != nil {
+	// Get user
+	user, err := cfg.DbQueries.GetUserByID(req.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error getting user")
 		return
 	}
+
+	respondWithUserJSON(w, http.StatusOK, user)
 }
+
+// Auth Handlers
 
 func (cfg *Config) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
@@ -489,4 +470,43 @@ func (cfg *Config) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusNoContent, "Refresh token revoked")
+}
+
+// Webhook Handlers
+
+func (cfg *Config) ChirpyRedWebhook(w http.ResponseWriter, r *http.Request) {
+	// Request
+	type parameters struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID string `json:"user_id"`
+		} `json:"data"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	if err := decoder.Decode(&params); err != nil {
+		errMessage := fmt.Sprintf("Error decoding parameters: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMessage)
+		return
+	}
+
+	// Check for event
+	if params.Event != "user.upgraded" {
+		respondWithError(w, http.StatusNoContent, "Invalid event")
+		return
+	}
+
+	// Get user ID
+	userID := uuid.MustParse(params.Data.UserID)
+
+	// Update users to be chirpy red
+	if err := cfg.DbQueries.SetChirpyRedUserByID(r.Context(), database.SetChirpyRedUserByIDParams{
+		ID:          userID,
+		IsChirpyRed: true,
+	}); err != nil {
+		respondWithError(w, http.StatusNotFound, "Error updating user")
+		return
+	}
+	respondWithJSON(w, http.StatusNoContent, "User upgraded")
+
 }

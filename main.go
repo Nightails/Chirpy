@@ -46,6 +46,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.LoginUser)
 	mux.HandleFunc("POST /api/refresh", cfg.RefreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", cfg.RevokeRefreshToken)
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.ChirpyRedWebhook)
 	server := http.Server{Addr: ":8080", Handler: mux}
 	if err := server.ListenAndServe(); err != nil {
 		return

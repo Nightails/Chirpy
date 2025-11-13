@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -124,12 +125,36 @@ func (cfg *Config) CreateChirp(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *Config) GetChirps(w http.ResponseWriter, req *http.Request) {
+	// Get chirps
 	chirps, err := cfg.DbQueries.GetChirps(req.Context())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error getting chirps")
 		return
 	}
 
+	// Filter by author if provided
+	authorID := req.URL.Query().Get("author_id")
+	if authorID != "" {
+		filteredChirps := make([]database.Chirp, 0, len(chirps))
+		for _, chirp := range chirps {
+			if chirp.UserID == uuid.MustParse(authorID) {
+				filteredChirps = append(filteredChirps, chirp)
+			}
+		}
+		chirps = filteredChirps
+	}
+
+	// Optional sorting by createdAt
+	// Default is ascending
+	optionalSort := req.URL.Query().Get("sort")
+	sort.Slice(chirps, func(i, j int) bool {
+		if optionalSort == "desc" {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		}
+		return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+	})
+
+	// Response
 	type chirpResponse struct {
 		ID        uuid.UUID `json:"id"`
 		CreatedAt time.Time `json:"created_at"`
